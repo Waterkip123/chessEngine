@@ -22,7 +22,7 @@ find_package(wxWidgets REQUIRED COMPONENTS net core base)
 include(${wxWidgets_USE_FILE})
 
 # Add your target executable
-add_executable(ChessBoard ChessBoard.cpp)
+add_executable(ChessBoard src/ChessBoard.cpp src/ChessEngine.cpp src/ChessGUI.cpp src/Utils.cpp)
 
 # Link against wxWidgets libraries
 target_link_libraries(ChessBoard PRIVATE ${wxWidgets_LIBRARIES})
