@@ -14,7 +14,10 @@
 #include <wx/dcbuffer.h>
 
 #include "ChessBoard.hpp"
+#include "ChessGame.hpp"
 #include "ChessGUI.hpp"
+#include "Utils.hpp"
+#include "Piece.hpp"
 
 class Pieces
 {
@@ -91,7 +94,7 @@ public:
 class MyPanel : public wxPanel
 {
 public:
-    std::vector<Square> squares;
+    // std::vector<Square> squares;
     bool redraw = false;
 
     MyPanel(wxFrame *parent) : wxPanel(parent)
@@ -105,6 +108,8 @@ public:
         // Parse the FEN string
         game.parseFEN(fenString);
         // LoadFile(wxInputStream & stream, wxBitmapType type = wxBITMAP_TYPE_ANY, int index = -1)
+
+        game.board.update(game.whitePieces, game.blackPieces);
     }
 
     void OnPaint(wxPaintEvent &event)
@@ -112,30 +117,89 @@ public:
         wxBufferedPaintDC dc(this);
         // Draw the chessboard
         DrawChessboard(dc);
-        for (Square square : squares)
-        {
-            dc.SetBrush(wxBrush(square.color));
-            dc.DrawRectangle(square.position.x * 128, square.position.y * 128, 128, 128);
-        }
+        // for (Square square : squares)
+        // {
+        //     dc.SetBrush(wxBrush(square.color));
+        //     dc.DrawRectangle(square.position.x * 128, square.position.y * 128, 128, 128);
+        // }
 
         // squares.clear();
 
         // Draw the PNG image directly on the panel
     }
 
+    Vec2 wxPointToVec2(wxPoint point)
+    {
+        return Vec2((point.x / 128), 7 - (point.y / 128));
+    }
+
     void OnMouseDown(wxMouseEvent &event)
     {
+        Vec2 clickedSquare = wxPointToVec2(event.GetPosition());
 
-        game.makeMove(ChessMove(game.whitePieces[9].position, game.whitePieces[9].position + Vec2(1, 2)));
+        if (makingMove)
+        {
+            if (clickedSquare == movingPiece->position)
+            {
+                movingPiece = nullptr;
+                makingMove = !makingMove;
+                squares.clear();
+            }
+
+            for (ChessMove move : legalMoves)
+            {
+                if (clickedSquare == move.targetSquare)
+                {
+                    game.makeMove(ChessMove(movingPiece->position, clickedSquare));
+                    makingMove = !makingMove;
+                    squares.clear();
+                }
+            }
+        }
+        else
+        {
+            movingPiece = game.board.board[clickedSquare.x][clickedSquare.y];
+
+            if (movingPiece != nullptr)
+            {
+                legalMoves.clear();
+                game.generateMoves(*movingPiece, legalMoves);
+
+                for (ChessMove move : legalMoves)
+                {
+                    Square square(move.targetSquare, wxColour(200, 50, 50));
+                    squares.push_back(square);
+                }
+
+                Square square(clickedSquare, wxColour(150, 200, 100));
+                squares.push_back(square);
+                makingMove = !makingMove;
+            }
+        }
+
         this->Refresh();
+    }
+
+    wxColour alphaBlendWxColour(wxColour fg, wxColour bg, float alpha)
+    {
+        float r = bg.Red() * (1 - alpha) + fg.Red() * alpha;
+        float g = bg.Green() * (1 - alpha) + fg.Green() * alpha;
+        float b = bg.Blue() * (1 - alpha) + fg.Blue() * alpha;
+
+        wxColour result((uint8_t)r, (uint8_t)g, (uint8_t)b);
+        return result;
     }
 
 private:
     ChessGame game;
     bool makingMove = false;
     Vec2 selectedSquare;
+    Piece *movingPiece;
+    std::vector<ChessMove> legalMoves;
+    std::vector<Square> squares;
 
-    void DrawChessboard(wxDC &dc)
+    void
+    DrawChessboard(wxDC &dc)
     {
         wxTextCtrl *control = new wxTextCtrl();
         wxStreamToTextRedirector redirect(control);
@@ -183,7 +247,7 @@ private:
             {
                 // Set the custom color for the brush based on the square position
                 wxColour squareColor = ((row + col) % 2 == 0) ? lightColor : darkColor;
-                dc.SetBrush(wxBrush(squareColor));
+                dc.SetBrush(wxBrush(squareColor, wxBRUSHSTYLE_SOLID));
 
                 // Calculate the position of each square
                 int x = col * squareSize;
@@ -194,18 +258,52 @@ private:
             }
         }
 
-        for (Piece piece : game.whitePieces)
+        for (Square square : squares)
         {
-            dc.DrawBitmap(white_map[piece.pieceType], piece.position.x * 128, 1024 - (piece.position.y + 1) * 128);
+            float alpha = 0.8;
+            wxColour squareColor = ((square.position.x + 7 - square.position.y) % 2 == 0) ? lightColor : darkColor;
+            wxColour blendedColour = alphaBlendWxColour(square.color, squareColor, alpha);
+            dc.SetBrush(wxBrush(blendedColour));
+            dc.DrawRectangle(square.position.x * squareSize, (7 - square.position.y) * squareSize, squareSize, squareSize);
         }
 
-        for (Piece piece : game.blackPieces)
+        if (true)
         {
-            dc.DrawBitmap(black_map[piece.pieceType], piece.position.x * 128, 1024 - (piece.position.y + 1) * 128);
+            for (int row = 0; row < 8; ++row)
+            {
+                for (int col = 0; col < 8; ++col)
+                {
+                    Piece *piece = game.board.board[col][row];
+
+                    if (piece != nullptr)
+                    {
+                        if (piece->pieceColor == PieceColor::White)
+                        {
+                            dc.DrawBitmap(white_map[piece->pieceType], col * 128, 1024 - (row + 1) * 128);
+                        }
+                        else
+                        {
+                            dc.DrawBitmap(black_map[piece->pieceType], col * 128, 1024 - (row + 1) * 128);
+                        }
+                    }
+                }
+            }
         }
-        game.calcMoves();
+        else
+        {
+
+            for (Piece piece : game.whitePieces)
+            {
+                dc.DrawBitmap(white_map[piece.pieceType], piece.position.x * 128, 1024 - (piece.position.y + 1) * 128);
+            }
+
+            for (Piece piece : game.blackPieces)
+            {
+                dc.DrawBitmap(black_map[piece.pieceType], piece.position.x * 128, 1024 - (piece.position.y + 1) * 128);
+            }
+            game.calcMoves();
+        }
     }
-
     Pieces pieces;
 
     // Event table declaration
