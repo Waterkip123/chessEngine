@@ -34,6 +34,8 @@ public:
     std::vector<Vec2> whiteTargetedSquares;
     std::vector<Vec2> blackTargetedSquares;
 
+    std::pair<Vec2, Piece *> enPassantTarget;
+
     void parseFEN(const std::string &fen);
     // PieceList getPieceList();
     void calcMoves();

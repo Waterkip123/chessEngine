@@ -91,11 +91,6 @@ void ChessGame::parseFEN(const std::string &fen)
     position.fullmoveNumber = std::stoi(tokens[5]);*/
 }
 
-// PieceList ChessGame::getPieceList()
-// {
-//     return PieceList(whitePieces, blackPieces);
-// }
-
 void ChessGame::calcMoves()
 {
     generateAllMoves();
@@ -103,44 +98,49 @@ void ChessGame::calcMoves()
 
 void ChessGame::makeMove(ChessMove move)
 {
+
     if (isOccupied(move.targetSquare, PieceColor::White) || isOccupied(move.targetSquare, PieceColor::Black))
     {
         capturePiece(move.targetSquare);
     }
-
-    /*for (Piece &piece : whitePieces)
-    {
-        if (piece.position == move.startSquare)
-        {
-            piece.position = move.targetSquare;
-            piece.hasMoved = true;
-            // drawRect(dc, move.targetSquare, wxColour(0, 200, 0));
-        }
-    }
-
-    for (Piece &piece : blackPieces)
-    {
-        if (piece.position == move.startSquare)
-        {
-
-            // drawRect(dc, move.targetSquare, wxColour(0, 200, 0));
-        }
-    }*/
 
     Piece *piece = board.board[move.startSquare.x][move.startSquare.y];
 
     piece->position = move.targetSquare;
     piece->hasMoved = true;
 
+    if ((piece->pieceType == PieceType::WhitePawn || piece->pieceType == PieceType::BlackPawn) && move.targetSquare == enPassantTarget.first)
+    {
+        capturePiece(enPassantTarget.second->position);
+    }
+
     int8_t moveX = move.targetSquare.x - move.startSquare.x;
 
-    if (piece->pieceType == PieceType::King && (moveX == 2 || moveX == -2))
+    if (piece->pieceType == PieceType::King && moveX == 2)
     {
-        // Piece *kingSideRook = board.board[7][0];
-
-        ChessMove rookMove(Vec2(7, 0), Vec2(5, 0));
+        ChessMove rookMove(Vec2(7, piece->position.y), Vec2(5, piece->position.y));
 
         makeMove(rookMove);
+    }
+
+    if (piece->pieceType == PieceType::King && moveX == -2)
+    {
+        ChessMove rookMove(Vec2(0, piece->position.y), Vec2(3, piece->position.y));
+
+        makeMove(rookMove);
+    }
+
+    enPassantTarget = std::make_pair(Vec2(), nullptr);
+
+    if (piece->pieceType == PieceType::WhitePawn && move.targetSquare.y - move.startSquare.y == 2)
+    {
+
+        enPassantTarget = std::make_pair(move.targetSquare + Vec2(0, -1), piece);
+    }
+
+    if (piece->pieceType == PieceType::BlackPawn && move.targetSquare.y - move.startSquare.y == -2)
+    {
+        enPassantTarget = std::make_pair(move.targetSquare + Vec2(0, 1), piece);
     }
 
     board.update(whitePieces, blackPieces);
@@ -188,10 +188,11 @@ void ChessGame::generatePawnMoves(Piece &piece, std::vector<ChessMove> &moves)
     Vec2 tempMove;
     std::vector<Vec2> directions = directionsMap[piece.pieceType];
 
+    // double pawn move
     if (!piece.hasMoved)
     {
         tempMove = piece.position + directions[0] * 2;
-        if (tempMove.x <= 7 && tempMove.x >= 0 && tempMove.y <= 7 && tempMove.y >= 0 && !isOccupied(tempMove, piece.pieceColor))
+        if (tempMove.x <= 7 && tempMove.x >= 0 && tempMove.y <= 7 && tempMove.y >= 0 && !isOccupied(tempMove, piece.pieceColor) && !isOccupied(tempMove, oppositeColorMap[piece.pieceColor]))
         {
             ChessMove move(piece.position, tempMove);
             moves.push_back(move);
@@ -199,14 +200,14 @@ void ChessGame::generatePawnMoves(Piece &piece, std::vector<ChessMove> &moves)
     }
 
     tempMove = piece.position + directions[1];
-    if (tempMove.x <= 7 && tempMove.x >= 0 && tempMove.y <= 7 && tempMove.y >= 0 && isOccupied(tempMove, oppositeColorMap[piece.pieceColor]))
+    if (tempMove.x <= 7 && tempMove.x >= 0 && tempMove.y <= 7 && tempMove.y >= 0 && (isOccupied(tempMove, oppositeColorMap[piece.pieceColor]) || tempMove == enPassantTarget.first))
     {
         ChessMove move(piece.position, tempMove);
         moves.push_back(move);
     }
 
     tempMove = piece.position + directions[2];
-    if (tempMove.x <= 7 && tempMove.x >= 0 && tempMove.y <= 7 && tempMove.y >= 0 && isOccupied(tempMove, oppositeColorMap[piece.pieceColor]))
+    if (tempMove.x <= 7 && tempMove.x >= 0 && tempMove.y <= 7 && tempMove.y >= 0 && (isOccupied(tempMove, oppositeColorMap[piece.pieceColor]) || tempMove == enPassantTarget.first))
     {
         ChessMove move(piece.position, tempMove);
         moves.push_back(move);
@@ -251,6 +252,11 @@ void ChessGame::generateBishopMoves(Piece &piece, std::vector<ChessMove> &moves)
             {
                 ChessMove move(piece.position, tempMove);
                 moves.push_back(move);
+
+                if (isOccupied(tempMove, oppositeColorMap[piece.pieceColor]))
+                {
+                    validMove = false;
+                }
             }
             else
             {
@@ -278,6 +284,11 @@ void ChessGame::generateRookMoves(Piece &piece, std::vector<ChessMove> &moves)
             {
                 ChessMove move(piece.position, tempMove);
                 moves.push_back(move);
+
+                if (isOccupied(tempMove, oppositeColorMap[piece.pieceColor]))
+                {
+                    validMove = false;
+                }
             }
             else
             {
@@ -305,6 +316,11 @@ void ChessGame::generateQueenMoves(Piece &piece, std::vector<ChessMove> &moves)
             {
                 ChessMove move(piece.position, tempMove);
                 moves.push_back(move);
+
+                if (isOccupied(tempMove, oppositeColorMap[piece.pieceColor]))
+                {
+                    validMove = false;
+                }
             }
             else
             {
@@ -330,14 +346,20 @@ void ChessGame::generateKingMoves(Piece &piece, std::vector<ChessMove> &moves)
         }
     }
 
-    Piece &kingSideRook = *board.board[7][0];
+    int8_t kingY = piece.position.y;
 
-    if (!piece.hasMoved && !kingSideRook.hasMoved && board.board[6][0] == nullptr && board.board[5][0] == nullptr)
+    Piece *kingSideRook = board.board[7][kingY];
+    Piece *queenSideRook = board.board[0][kingY];
+
+    if (!piece.hasMoved && !kingSideRook->hasMoved && board.board[6][kingY] == nullptr && board.board[5][kingY] == nullptr)
     {
-        Vec2 kingMove(6, 0);
-        // Vec2 rookMove(5, 0);
+        Vec2 kingMove(6, kingY);
+        moves.push_back(ChessMove(piece.position, kingMove));
+    }
 
-        // ChessMove(kingSideRook.position, rookMove);
+    if (!piece.hasMoved && !queenSideRook->hasMoved && board.board[1][kingY] == nullptr && board.board[2][kingY] == nullptr && board.board[3][kingY] == nullptr)
+    {
+        Vec2 kingMove(2, kingY);
         moves.push_back(ChessMove(piece.position, kingMove));
     }
 }
@@ -361,25 +383,11 @@ void ChessGame::generateAllMoves()
     for (Piece piece : whitePieces)
     {
         generateMoves(piece, whiteMoves);
-        // makeMove(whiteMoves[0]);
     }
 
     for (Piece piece : blackPieces)
     {
         generateMoves(piece, blackMoves);
-        // makeMove(blackMoves[0]);
-    }
-
-    if (whiteMoves.size() != 0)
-    {
-        // makeMove(whiteMoves[0]);
-        // generateAllMoves();
-    }
-
-    if (blackMoves.size() != 0)
-    {
-        // makeMove(blackMoves[0]);
-        // generateAllMoves();
     }
 }
 
@@ -387,25 +395,9 @@ bool ChessGame::isOccupied(Vec2 position, PieceColor pieceColor)
 {
     bool result = false;
 
-    if (pieceColor == PieceColor::White)
+    if (board.board[position.x][position.y] != nullptr && board.board[position.x][position.y]->pieceColor == pieceColor)
     {
-        for (Piece piece : whitePieces)
-        {
-            if (piece.position == position)
-            {
-                result = true;
-            }
-        }
-    }
-    else
-    {
-        for (Piece piece : blackPieces)
-        {
-            if (piece.position == position)
-            {
-                result = true;
-            }
-        }
+        result = true;
     }
 
     return result;
